@@ -1,0 +1,8 @@
+/build/
+/z2src/
+*.log
+/utils/game_filter.enabled
+/utils/test results
+/lists/*-user.txt
+__pycache__/
+*.pyc
