@@ -14,7 +14,7 @@ from pathlib import Path
 BAD = re.compile(r'error|fail|not found|invalid|unknown|does not exist|cannot|unrecogni|required', re.I)
 
 def run_nfqws(nfqws, args, sudo, dry=False):
-    cmd = (['sudo', '-E'] if sudo else []) + (['timeout', '-s', 'INT', '3'] if not dry else []) + [nfqws, '--qnum=200'] + (['--uid=0:0'] if (sudo or os.geteuid() == 0) else []) + (['--dry-run'] if dry else []) + args
+    cmd = (['sudo', '-E'] if sudo else []) + (['timeout', '-s', 'INT', '3'] if not dry else []) + [nfqws, '--qnum=200'] + (['--dry-run'] if dry else []) + args
     r = subprocess.run(cmd, capture_output=True, text=True)
     return r.stdout + r.stderr
 
@@ -25,9 +25,14 @@ def lua_functions(dist):
     return names
 
 def main():
-    dist, nfqws, pwsh = Path(sys.argv[1]).resolve(), sys.argv[2], sys.argv[3]
+    src, nfqws, pwsh = Path(sys.argv[1]).resolve(), sys.argv[2], sys.argv[3]
     sudo = '--sudo' in sys.argv
-    tmp = Path(tempfile.mkdtemp()); tmp.chmod(0o755)   # nfqws2 drops privileges after init; --uid=0:0 below keeps root, this is belt and braces
+    # nfqws2 drops root AND its capabilities after initialisation, so it can only read files whose whole path is
+    # world-accessible. CI workspaces live under /home/runner (mode 0750): validate a copy under /tmp instead.
+    tmp = Path(tempfile.mkdtemp(dir='/tmp')); tmp.chmod(0o755)
+    dist = tmp / 'dist'
+    shutil.copytree(src, dist)
+    subprocess.run(['chmod', '-R', 'a+rX', str(tmp)], check=True)
     lists = tmp / 'lists'; shutil.copytree(dist / 'lists', lists)
     for n in ('list-general-user.txt', 'list-exclude-user.txt', 'ipset-exclude-user.txt'):
         (lists / n).write_text('example.abc\n')
@@ -36,6 +41,8 @@ def main():
     control = run_nfqws(nfqws, ['--lua-init=@' + lua[0], '--lua-init=@' + lua[1], '--payload=tls_client_hello',
                                 '--lua-desync=fake:blob=fake_default_tls'], sudo)
     strict = 'unbinding from queue' in control and not BAD.search(control)
+    if not strict and re.search(r'not accessible|check file permissions|Permission denied', control):
+        sys.exit('validator setup error: nfqws2 cannot read its files (not an NFQUEUE problem):\n' + control.strip()[-400:])
     print('mode: %s' % ('STRICT (real nfqws2 initialisation)' if strict else
                         'STATIC (cannot bind NFQUEUE here: option/file check + function names only)'))
     if not strict: print('control output tail:', control.strip().splitlines()[-2:])
