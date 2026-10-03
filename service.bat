@@ -299,9 +299,9 @@ chcp 437 > nul
 cls
 
 :: Set current version and URLs
-set "GITHUB_VERSION_URL=https://raw.githubusercontent.com/OWNER/REPO/main/.service/version.txt"
-set "GITHUB_RELEASE_URL=https://github.com/OWNER/REPO/releases/tag/"
-set "GITHUB_DOWNLOAD_URL=https://github.com/OWNER/REPO/releases/latest"
+set "GITHUB_VERSION_URL=https://raw.githubusercontent.com/Zetklif/zapret2-discord-youtube/main/.service/version.txt"
+set "GITHUB_RELEASE_URL=https://github.com/Zetklif/zapret2-discord-youtube/releases/tag/"
+set "GITHUB_DOWNLOAD_URL=https://github.com/Zetklif/zapret2-discord-youtube/releases/latest"
 
 :: Get the latest version from GitHub
 for /f "delims=" %%A in ('powershell -NoProfile -Command "(Invoke-WebRequest -Uri \"%GITHUB_VERSION_URL%\" -Headers @{\"Cache-Control\"=\"no-cache\"} -UseBasicParsing -TimeoutSec 5).Content.Trim()" 2^>nul') do set "GITHUB_VERSION=%%A"
@@ -1041,7 +1041,7 @@ chcp 437 > nul
 cls
 
 set "listFile=%~dp0lists\ipset-all.txt"
-set "url=https://raw.githubusercontent.com/OWNER/REPO/refs/heads/main/.service/ipset-service.txt"
+set "url=https://raw.githubusercontent.com/Zetklif/zapret2-discord-youtube/refs/heads/main/.service/ipset-service.txt"
 
 echo Updating ipset-all...
 
@@ -1074,7 +1074,7 @@ chcp 437 > nul
 cls
 
 set "hostsFile=%SystemRoot%\System32\drivers\etc\hosts"
-set "hostsUrl=https://raw.githubusercontent.com/OWNER/REPO/refs/heads/main/.service/hosts"
+set "hostsUrl=https://raw.githubusercontent.com/Zetklif/zapret2-discord-youtube/refs/heads/main/.service/hosts"
 set "tempFile=%TEMP%\zapret_hosts.txt"
 set "needsUpdate=0"
 
