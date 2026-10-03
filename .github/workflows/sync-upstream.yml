@@ -1,0 +1,181 @@
+name: Sync upstream
+
+# Polls the two upstream projects and republishes this build when either releases a new version:
+#   Flowseal/zapret-discord-youtube  (strategies, lists, fakes, service.bat)
+#   bol-van/zapret2                  (winws2.exe, WinDivert, lua scripts)
+# A new release is published only after every strategy has been accepted by the real nfqws2
+# of the same zapret2 version. If conversion or validation fails, nothing is published and an
+# issue is opened instead.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and re-publish even if nothing changed
+        type: boolean
+        default: false
+      rev_bump:
+        description: Publish a new release (-rN suffix) from the same upstream versions, e.g. after changing tools/
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  BRANCH: ${{ github.ref_name }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+
+      - name: Bump build revision
+        if: ${{ inputs.rev_bump }}
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path('.service/upstream.json')
+          d = json.loads(p.read_text()); d['rev'] = int(d.get('rev', 0)) + 1
+          p.write_text(json.dumps(d, indent=2) + '\n')
+          PY
+
+      - name: Check upstream releases
+        id: check
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          args=(--repo "$REPO")
+          [ "$FORCE" = "true" ] && args+=(--force)
+          python3 tools/sync.py check "${args[@]}" 2>&1 | tee check.log
+
+      # ------------------------------------------------------------------ rebuild path
+      - name: Build distribution
+        if: steps.check.outputs.build == 'true'
+        run: |
+          python3 tools/sync.py build \
+            --repo "$REPO" --branch "$BRANCH" \
+            --flowseal-tag "${{ steps.check.outputs.flowseal }}" \
+            --zapret2-tag "${{ steps.check.outputs.zapret2 }}" \
+            --rev "${{ steps.check.outputs.rev }}" \
+            --out build --save-zapret2-src z2src 2>&1 | tee build.log
+
+      - name: Build nfqws2 (same version as the shipped winws2.exe)
+        if: steps.check.outputs.build == 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libnetfilter-queue-dev libnfnetlink-dev zlib1g-dev libcap-dev \
+            libluajit-5.1-dev libmnl-dev libsystemd-dev luajit gcc make
+          make -C z2src -j"$(nproc)" 2>&1 | tail -5
+          test -x z2src/nfq2/nfqws2
+
+      - name: Validate every strategy
+        id: validate
+        if: steps.check.outputs.build == 'true'
+        run: |
+          python3 tools/validate.py build z2src/nfq2/nfqws2 "$(command -v pwsh)" --sudo 2>&1 | tee validate.log
+          echo "mode=$(grep -o 'mode=[a-z]*$' validate.log | tail -1 | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Apply build to the repository
+        if: steps.check.outputs.build == 'true'
+        run: python3 tools/sync.py apply --build build
+
+      # ------------------------------------------------------------------ always: fresh lists
+      # Flowseal refreshes the IP set and hosts on main between releases (no version change).
+      # "Update IPSet List" / "Update Hosts File" in service.bat download them from THIS repo.
+      - name: Refresh ipset / hosts lists from Flowseal main
+        run: python3 tools/sync.py lists-sync 2>&1 | tee lists.log
+
+      - name: Commit
+        id: commit
+        env:
+          BUILD: ${{ steps.check.outputs.build }}
+          FL: ${{ steps.check.outputs.flowseal }}
+          Z2: ${{ steps.check.outputs.zapret2 }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "committed=false" >> "$GITHUB_OUTPUT"; echo "nothing to commit"
+          else
+            if [ "$BUILD" = "true" ]; then msg="Sync upstream: Flowseal $FL, zapret2 $Z2"; else msg="Refresh ipset/hosts lists from Flowseal main"; fi
+            git commit -q -m "$msg"
+            git push
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish release
+        if: steps.check.outputs.build == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+          FL: ${{ steps.check.outputs.flowseal }}
+          Z2: ${{ steps.check.outputs.zapret2 }}
+          MODE: ${{ steps.validate.outputs.mode }}
+        run: |
+          zip="zapret2-discord-youtube-$VERSION.zip"
+          python3 tools/sync.py zip --build . --version "$VERSION" --out "$zip"
+          sha256sum "$zip" > sha256sum.txt
+          cat > notes.md <<EOF
+          Automated build.
+
+          | Component | Version |
+          |---|---|
+          | [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube/releases/tag/$FL) | $FL |
+          | [bol-van/zapret2](https://github.com/bol-van/zapret2/releases/tag/$Z2) | $Z2 |
+
+          All strategies were checked against nfqws2 $Z2 in **$MODE** mode (strict = real engine initialisation).
+          Unpack the archive to a path without non-ASCII characters and run a \`general2*.bat\` or \`service.bat\` as administrator.
+          EOF
+          gh release delete "$VERSION" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$VERSION" "$zip" sha256sum.txt --title "$VERSION" --notes-file notes.md --target "$(git rev-parse HEAD)"
+
+      # ------------------------------------------------------------------ housekeeping
+      # GitHub disables scheduled workflows after 60 days without repository activity.
+      - name: Keep schedule alive
+        if: steps.commit.outputs.committed == 'false'
+        run: |
+          last=$(git log -1 --format=%ct); now=$(date +%s)
+          if [ $(( now - last )) -gt $(( 45 * 86400 )) ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -q -m "chore: keep scheduled sync active"
+            git push
+          fi
+
+      - name: Report failure
+        if: failure()
+        env:
+          FL: ${{ steps.check.outputs.flowseal }}
+          Z2: ${{ steps.check.outputs.zapret2 }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Upstream sync failed: Flowseal ${FL:-?} / zapret2 ${Z2:-?}"
+          {
+            echo "The scheduled sync did not publish a new release. Run: $RUN"
+            echo
+            echo "Nothing was committed or released. Last log lines:"
+            for f in build.log validate.log lists.log check.log; do
+              [ -f "$f" ] && { echo; echo "\`\`\`"; echo "## $f"; tail -n 40 "$f"; echo "\`\`\`"; }
+            done
+          } > issue.md
+          n=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then gh issue comment "$n" --body-file issue.md; else gh issue create --title "$title" --body-file issue.md; fi
