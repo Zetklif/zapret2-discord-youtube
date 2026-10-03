@@ -1,0 +1,4 @@
+bin\winws2.exe, WinDivert.dll, WinDivert64.sys, cygwin1.dll are redistributed unmodified from the
+zapret2 release v1.0.5.2 (https://github.com/bol-van/zapret2). WinDivert and Cygwin are separate projects with their own
+licences; see their upstream distributions.
+Strategies are converted from Flowseal/zapret-discord-youtube release 1.10.3.
