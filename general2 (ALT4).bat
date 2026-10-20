@@ -20,8 +20,8 @@ start "zapret2: %~n0" /min "%BIN%winws2.exe" --wf-tcp-out=80,443,2053,2083,2087,
 --blob=ACTIVE_GAME_UDP:@"%BIN%ACTIVE_GAME_UDP.bin" ^
 --blob=quic_initial_www_google_com:@"%BIN%quic_initial_www_google_com.bin" ^
 --blob=stun:@"%BIN%stun.bin" ^
---blob=tls_clienthello_max_ru:@"%BIN%tls_clienthello_max_ru.bin" ^
 --blob=tls_clienthello_www_google_com:@"%BIN%tls_clienthello_www_google_com.bin" ^
+--blob=tls_clienthello_www_sferum_ru:@"%BIN%tls_clienthello_www_sferum_ru.bin" ^
 --filter-udp=443 --hostlist="%LISTS%list-general.txt" --hostlist="%LISTS%list-general-user.txt" --hostlist-exclude="%LISTS%list-exclude.txt" --hostlist-exclude="%LISTS%list-exclude-user.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt"  ^
   --payload=quic_initial --lua-desync=fake:blob=quic_initial_www_google_com:repeats=6 --new ^
 --filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun  ^
@@ -34,14 +34,14 @@ start "zapret2: %~n0" /min "%BIN%winws2.exe" --wf-tcp-out=80,443,2053,2083,2087,
   --payload=http_req --lua-desync=fake:blob=fake_default_http:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:ip_id=zero --lua-desync=multisplit:ip_id=zero --new ^
 --filter-tcp=80,443 --hostlist="%LISTS%list-general.txt" --hostlist="%LISTS%list-general-user.txt" --hostlist-exclude="%LISTS%list-exclude.txt" --hostlist-exclude="%LISTS%list-exclude-user.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt" --out-range=-d10 ^
   --payload=tls_client_hello --lua-desync=fake:blob=stun:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=fake:blob=tls_clienthello_www_google_com:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit ^
-  --payload=http_req --lua-desync=fake:blob=tls_clienthello_max_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit --new ^
+  --payload=http_req --lua-desync=fake:blob=tls_clienthello_www_sferum_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit --new ^
 --filter-udp=443 --ipset="%LISTS%ipset-all.txt" --hostlist-exclude="%LISTS%list-exclude.txt" --hostlist-exclude="%LISTS%list-exclude-user.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt"  ^
   --payload=quic_initial --lua-desync=fake:blob=quic_initial_www_google_com:repeats=6 --new ^
 --filter-tcp=80,443,8443 --ipset="%LISTS%ipset-all.txt" --hostlist-exclude="%LISTS%list-exclude.txt" --hostlist-exclude="%LISTS%list-exclude-user.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt" --out-range=-d10 ^
   --payload=tls_client_hello --lua-desync=fake:blob=stun:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=fake:blob=tls_clienthello_www_google_com:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit ^
-  --payload=http_req --lua-desync=fake:blob=tls_clienthello_max_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit --new ^
+  --payload=http_req --lua-desync=fake:blob=tls_clienthello_www_sferum_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up --lua-desync=multisplit --new ^
 --filter-tcp=%GameFilterTCP% --ipset="%LISTS%ipset-all.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt" --out-range=-n2 ^
   --payload=tls_client_hello,unknown --lua-desync=fake:blob=stun:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:payload=known,unknown --lua-desync=fake:blob=tls_clienthello_www_google_com:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:payload=known,unknown --lua-desync=multisplit:payload=known,unknown ^
-  --payload=http_req --lua-desync=fake:blob=tls_clienthello_max_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:payload=known,unknown --lua-desync=multisplit:payload=known,unknown --new ^
+  --payload=http_req --lua-desync=fake:blob=tls_clienthello_www_sferum_ru:repeats=6:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:payload=known,unknown --lua-desync=multisplit:payload=known,unknown --new ^
 --filter-udp=%GameFilterUDP% --ipset="%LISTS%ipset-all.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt" --out-range=-n1 ^
   --payload=unknown --lua-desync=fake:blob=ACTIVE_GAME_UDP:repeats=10:payload=known,unknown
